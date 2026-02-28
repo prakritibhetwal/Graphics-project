@@ -152,11 +152,17 @@ def cmd_decrease_speed() -> None:
 # ═════════════════════════════════════════════════════════════════════════════
 
 def cmd_toggle_earth_city_view() -> None:
-    """Toggle between solar system and Earth city views."""
+    """Toggle between solar system and Earth city views.
+    
+    When going to Earth city, first selects Earth directly so camera zooms to it.
+    """
     if state.earth_transition < config.EARTH_TRANSITION_THRESHOLD_MID:
+        # Going TO city view - select Earth first so camera zooms to it
+        cmd_select_planet(2)  # Earth is index 2
         state.transition_direction = 1
         state.transition_rotation = 0.0
     else:
+        # Going back to solar system
         state.transition_direction = -1
         state.transition_rotation = 0.0
 
@@ -273,7 +279,7 @@ def _pick_planet_at_cursor(window) -> Optional[int]:
 
 def cmd_select_planet(planet_index: int) -> None:
     """
-    Select a planet and zoom to it.
+    Select a planet and zoom to it with a dramatic close-up view.
     
     Args:
         planet_index: Index of the planet to select
@@ -282,8 +288,11 @@ def cmd_select_planet(planet_index: int) -> None:
         if 0 <= planet_index < len(data.planets):
             state.selected_planet = planet_index
             p = data.planets[planet_index]
-            # Zoom to show the planet with some margin
-            state.zoom_target = -(p["distance"] * 1.1 + 1.5)
+            # Calculate zoom to show planet large and impressive
+            # Uses planet radius (visual size) as primary factor for dramatic zoom
+            radius = p["radius"]
+            distance = p["distance"]
+            state.zoom_target = -(radius * 10 + distance * 0.2)
     except IndexError as e:
         log_error(f"Invalid planet index {planet_index}: {e}", error_type="INPUT_ERROR")
 

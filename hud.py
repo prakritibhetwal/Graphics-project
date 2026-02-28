@@ -166,9 +166,9 @@ def draw_planet_info_overlay():
     glEnable(GL_BLEND)
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 
-    # Background panel (taller to fit extra rows)
-    px, py, pw, ph = 450, 15, 335, 230
-    glColor4f(0.0, 0.0, 0.1, 0.75)
+    # Background panel (smaller, positioned on LEFT side)
+    px, py, pw, ph = 10, 100, 360, 350
+    glColor4f(0.0, 0.0, 0.1, 0.85)
     glBegin(GL_QUADS)
     glVertex2f(px,      py);      glVertex2f(px + pw, py)
     glVertex2f(px + pw, py + ph); glVertex2f(px,      py + ph)
@@ -176,7 +176,7 @@ def draw_planet_info_overlay():
 
     # Thin border
     glColor4f(0.6, 0.8, 1.0, 0.9)
-    glLineWidth(1.5)
+    glLineWidth(2.0)
     glBegin(GL_LINE_LOOP)
     glVertex2f(px,      py);      glVertex2f(px + pw, py)
     glVertex2f(px + pw, py + ph); glVertex2f(px,      py + ph)
@@ -192,17 +192,18 @@ def draw_planet_info_overlay():
     # Mode labels
     MODE_LABELS = {"S": "Standard", "C": "Cinematic", "I": "Educational", "G": "God"}
 
-    tx = px + 10
-    _hud(tx, py + 22,  info["name"],                                  color=(1.0, 0.9, 0.3))
-    _hud(tx, py + 42,  f"Radius   : {info['radius_km']:,} km")
-    _hud(tx, py + 58,  f"Day      : {info['day_h']:.1f} hours")
-    _hud(tx, py + 74,  f"Year     : {info['year_d']:,} Earth days")
-    _hud(tx, py + 90,  f"Moons    : {info['moons']}")
-    _hud(tx, py + 106, f"Note     : {info['note']}")
-    _hud(tx, py + 126, f"Mode     : {MODE_LABELS.get(state.simulation_mode, state.simulation_mode)}",
+    tx = px + 12
+    # 30px spacing between lines for compact yet readable layout
+    _hud(tx, py + 25,  info["name"],                                  color=(1.0, 0.9, 0.3))
+    _hud(tx, py + 55,  f"Radius: {info['radius_km']:,} km")
+    _hud(tx, py + 80,  f"Day: {info['day_h']:.1f}h")
+    _hud(tx, py + 105, f"Year: {info['year_d']:,} days")
+    _hud(tx, py + 130, f"Moons: {info['moons']}")
+    _hud(tx, py + 155, f"Note: {info['note']}")
+    _hud(tx, py + 185, f"Mode: {MODE_LABELS.get(state.simulation_mode, state.simulation_mode)}",
          color=(0.4, 1.0, 0.4))
     
-    # Speed control with preset buttons and current value
+    # Speed control
     speed_str = f"Speed:"
     preset_speed = None
     if abs(state.speed_multiplier - 1.0) < 0.01:
@@ -213,14 +214,14 @@ def draw_planet_info_overlay():
         preset_speed = "[10X]"
     
     if preset_speed:
-        _hud(tx, py + 142, f"{speed_str}  {preset_speed}  (1/5/0 for preset, +/- fine-tune)",
+        _hud(tx, py + 210, f"{speed_str} {preset_speed}",
              color=(1.0, 0.8, 0.2))
     else:
-        _hud(tx, py + 142, f"{speed_str}  x{state.speed_multiplier:.2f}  (1/5/0 for preset, +/- fine-tune)",
+        _hud(tx, py + 210, f"{speed_str} x{state.speed_multiplier:.2f}",
              color=(1.0, 0.8, 0.2))
     
-    _hud(tx, py + 162, f"Orbit Spd: {data.planet_speeds[idx]:.4f} rad/frame")
-    _hud(tx, py + 185, "Click again or ESC to deselect",              color=(0.6, 0.6, 0.6))
+    _hud(tx, py + 235, f"Orbit: {data.planet_speeds[idx]:.4f} r/f")
+    _hud(tx, py + 310, "ESC to close", color=(0.6, 0.6, 0.6))
 
     glDisable(GL_BLEND)
     glEnable(GL_DEPTH_TEST)
