@@ -279,7 +279,7 @@ def _pick_planet_at_cursor(window) -> Optional[int]:
 
 def cmd_select_planet(planet_index: int) -> None:
     """
-    Select a planet and zoom to it with a dramatic close-up view.
+    Select a planet and zoom to it with a good viewing distance.
     
     Args:
         planet_index: Index of the planet to select
@@ -288,11 +288,11 @@ def cmd_select_planet(planet_index: int) -> None:
         if 0 <= planet_index < len(data.planets):
             state.selected_planet = planet_index
             p = data.planets[planet_index]
-            # Calculate zoom to show planet large and impressive
-            # Uses planet radius (visual size) as primary factor for dramatic zoom
+            # Calculate smooth zoom approach: camera closer for small planets, 
+            # farther for large/distant ones. Negative values = closer viewing.
             radius = p["radius"]
             distance = p["distance"]
-            state.zoom_target = -(radius * 10 + distance * 0.2)
+            state.zoom_target = -(radius * 12 + distance * 0.6)
     except IndexError as e:
         log_error(f"Invalid planet index {planet_index}: {e}", error_type="INPUT_ERROR")
 
