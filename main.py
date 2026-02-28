@@ -26,7 +26,7 @@ if not glfw.init():
     print("GLFW initialization failed!")
     raise SystemExit
 
-window = glfw.create_window(800, 900, "Mini Solar System and City View", None, None)
+window = glfw.create_window(1200, 1200, "Mini Solar System and City View", None, None)
 if not window:
     print("Window creation failed!")
     glfw.terminate()
@@ -49,9 +49,9 @@ glEnable(GL_NORMALIZE)
 state.quadric = gluNewQuadric()
 
 # Projection
-glViewport(0, 0, 800, 900)
+glViewport(0, 0, 1200, 1200)
 glMatrixMode(GL_PROJECTION)
-gluPerspective(45.0, 800 / 900, 0.01, 500.0)
+gluPerspective(45.0, 1200 / 1200, 0.01, 500.0)
 glMatrixMode(GL_MODELVIEW)
 
 # Compile city geometry into a GL display list
