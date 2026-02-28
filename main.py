@@ -1,10 +1,16 @@
 """
 main.py – Entry point: GLFW window, OpenGL setup, and the main render loop.
 
+Initializes the graphics engine, sets up callbacks, and runs the main animation loop.
+All state is managed through the state module. Rendering is delegated to specialized
+drawing modules (draw_planets, draw_city, hud).
+
 Run with:  python main.py
 """
 import math
 import time
+import sys
+from typing import Optional
 
 import glfw
 from OpenGL.GL   import *
@@ -19,43 +25,132 @@ import draw_planets
 import draw_city
 import hud
 import input as inp   # 'input' is a built-in name; alias avoids shadowing it
+import config
+from error_handler import log_error, ErrorContext, safe_call
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# ── INITIALIZATION & CLEANUP
+# ═════════════════════════════════════════════════════════════════════════════
+
+def init_glfw_window() -> Optional[any]:
+    """
+    Initialize GLFW and create the main rendering window.
+    
+    Returns:
+        GLFW window handle, or None if initialization failed
+    """
+    if not glfw.init():
+        log_error("GLFW initialization failed!", error_type="INIT_ERROR")
+        return None
+    
+    window = glfw.create_window(
+        config.WINDOW_WIDTH,
+        config.WINDOW_HEIGHT,
+        config.WINDOW_TITLE,
+        None, None
+    )
+    
+    if not window:
+        log_error("Window creation failed!", error_type="INIT_ERROR")
+        glfw.terminate()
+        return None
+    
+    glfw.make_context_current(window)
+    return window
+
+
+def init_opengl() -> None:
+    """
+    Initialize OpenGL state and settings.
+    
+    Configures:
+    - Depth testing and lighting
+    - Color material mode
+    - Quadric object for gluSphere/gluDisk rendering
+    - Viewport and projection matrices
+    Attributes:
+    """
+    glEnable(GL_DEPTH_TEST)
+    glEnable(GL_LIGHTING)
+    glEnable(GL_LIGHT0)
+    glEnable(GL_COLOR_MATERIAL)
+    glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE)
+    glEnable(GL_NORMALIZE)
+    
+    # Create shared quadric for sphere/disk rendering
+    state.quadric = gluNewQuadric()
+    if state.quadric is None:
+        log_error("Failed to create GLU quadric!", error_type="OPENGL_ERROR")
+    
+    # Projection
+    glViewport(0, 0, config.WINDOW_WIDTH, config.WINDOW_HEIGHT)
+    glMatrixMode(GL_PROJECTION)
+    gluPerspective(
+        config.CAMERA_FOV,
+        config.WINDOW_WIDTH / config.WINDOW_HEIGHT,
+        config.GL_NEAR_CLIP,
+        config.GL_FAR_CLIP
+    )
+    glMatrixMode(GL_MODELVIEW)
+
+
+def init_callbacks(window: any) -> None:
+    """
+    Register GLFW input callbacks.
+    
+    Args:
+        window: GLFW window handle
+    """
+    glfw.set_key_callback(window, inp.key_callback)
+    glfw.set_cursor_pos_callback(window, inp.mouse_callback)
+    glfw.set_mouse_button_callback(window, inp.mouse_button_callback)
+
+
+def cleanup_opengl() -> None:
+    """
+    Clean up OpenGL resources before exit.
+    
+    Deletes display lists and other GL objects created during runtime.
+    """
+    try:
+        if state.quadric is not None:
+            # Note: gluNewQuadric doesn't have a direct delete, but we can null it
+            state.quadric = None
+        
+        if state.city_list is not None:
+            glDeleteLists(state.city_list, 1)
+            state.city_list = None
+        
+        log_error("OpenGL resources cleaned up", error_type="INFO")
+    except Exception as e:
+        log_error(f"Error during OpenGL cleanup: {e}", error_type="CLEANUP_ERROR")
+
+
+def cleanup_glfw() -> None:
+    """Clean up GLFW before exit."""
+    try:
+        glfw.terminate()
+        log_error("GLFW terminated", error_type="INFO")
+    except Exception as e:
+        log_error(f"Error during GLFW cleanup: {e}", error_type="CLEANUP_ERROR")
+
 
 # ── GLFW / OpenGL initialisation ──────────────────────────────────────────────
 
-if not glfw.init():
-    print("GLFW initialization failed!")
-    raise SystemExit
-
-window = glfw.create_window(1200, 1200, "Mini Solar System and City View", None, None)
+window = init_glfw_window()
 if not window:
-    print("Window creation failed!")
-    glfw.terminate()
-    raise SystemExit
+    sys.exit(1)
 
-glfw.make_context_current(window)
 glutInit()   # initialise GLUT for bitmap text
 
-glfw.set_key_callback(window,          inp.key_callback)
-glfw.set_cursor_pos_callback(window,   inp.mouse_callback)
-glfw.set_mouse_button_callback(window, inp.mouse_button_callback)
-
-glEnable(GL_DEPTH_TEST)
-glEnable(GL_LIGHTING)
-glEnable(GL_LIGHT0)
-glEnable(GL_COLOR_MATERIAL)
-glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE)
-glEnable(GL_NORMALIZE)
-
-state.quadric = gluNewQuadric()
-
-# Projection
-glViewport(0, 0, 1200, 1200)
-glMatrixMode(GL_PROJECTION)
-gluPerspective(45.0, 1200 / 1200, 0.01, 500.0)
-glMatrixMode(GL_MODELVIEW)
+init_opengl()
+init_callbacks(window)
+lighting.setup_lighting()
 
 # Compile city geometry into a GL display list
 draw_city.init_city_list()
+
 
 # ── Main loop ─────────────────────────────────────────────────────────────────
 
@@ -417,4 +512,12 @@ while not glfw.window_should_close(window):
     glfw.swap_buffers(window)
     glfw.poll_events()
 
-glfw.terminate()
+# ── Cleanup and exit ───────────────────────────────────────────────────────────
+
+try:
+    cleanup_opengl()
+    cleanup_glfw()
+    log_error("Simulation ended gracefully", error_type="INFO")
+except Exception as e:
+    log_error(f"Error during cleanup: {e}", error_type="CRITICAL_ERROR", print_traceback=True)
+    sys.exit(1)

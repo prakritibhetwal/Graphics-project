@@ -1,54 +1,71 @@
 """
 draw_planets.py – Drawing functions for the sun, planetary bodies, and orbits.
-All functions use the shared `quadric` object stored in state.py.
+
+Provides functions to render celestial bodies with realistic lighting, atmosphere
+effects, trails, and selection indicators. All functions use the shared `quadric`
+object stored in state.py for efficient GLU sphere/disk rendering.
 """
 import math
 import time
+from typing import List, Tuple, Deque
 
 from OpenGL.GL  import *
 from OpenGL.GLU import *
 
 import state
+import config
 from lighting import set_planet_material
+from error_handler import log_error
 
 
 # ── Sun ────────────────────────────────────────────────────────────────────────
 
-def draw_sun_with_glow():
-    """Solid sun sphere with dramatic glow and light rays for maximum visual impact."""
-    glDisable(GL_LIGHTING)
-
-    # Bright core
-    glColor3f(1.0, 1.0, 0.0)
-    gluSphere(state.quadric, 1.0, 60, 60)
-
-    glEnable(GL_BLEND)
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE)  # additive blending for realistic glow
-
-    # Inner bright glow
-    glColor4f(1.0, 0.9, 0.0, 0.6)
-    gluSphere(state.quadric, 1.15, 40, 40)
+def draw_sun_with_glow() -> None:
+    """
+    Draw the sun with dramatic multi-layer glow effect.
     
-    # Mid glow
-    glColor4f(1.0, 0.7, 0.0, 0.4)
-    gluSphere(state.quadric, 1.3, 35, 35)
-
-    # Outer glow (large and fading)
-    glColor4f(1.0, 0.5, 0.0, 0.15)
-    gluSphere(state.quadric, 1.6, 30, 30)
+    Renders the sun as:
+    - Bright yellow core sphere
+    - Multiple additive-blended glow layers (progressively larger, fainter)
+    - Creates a realistic luminous halo effect
     
-    # Dramatic outer corona
-    glColor4f(1.0, 0.3, 0.0, 0.08)
-    gluSphere(state.quadric, 2.0, 25, 25)
+    Uses additive blending (GL_SRC_ALPHA, GL_ONE) for physically-based glow appearance.
+    Disables lighting during rendering since sun is self-emissive.
+    """
+    try:
+        if state.quadric is None:
+            log_error("Cannot draw sun: quadric not initialized", error_type="WARNING")
+            return
+        
+        glDisable(GL_LIGHTING)
 
-    glDisable(GL_BLEND)
-    glEnable(GL_LIGHTING)
+        # Bright core
+        glColor3f(1.0, 1.0, 0.0)
+        gluSphere(state.quadric, 1.0, 60, 60)
+
+        glEnable(GL_BLEND)
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE)  # additive blending for realistic glow
+
+        # Multi-layer glow for natural appearance
+        for layer in config.SUN_GLOW_LAYERS:
+            glColor4f(*layer["color"])
+            gluSphere(state.quadric, layer["radius"], 30, 30)
+
+        glDisable(GL_BLEND)
+        glEnable(GL_LIGHTING)
+    except Exception as e:
+        log_error(f"Error drawing sun: {e}", error_type="RENDERING_ERROR")
 
 
 # ── Orbits ─────────────────────────────────────────────────────────────────────
 
-def draw_orbit(distance):
-    """Draw a circular orbit guide in the XZ plane."""
+def draw_orbit(distance: float) -> None:
+    """
+    Draw a circular orbit guide path in the XZ plane.
+    
+    Args:
+        distance: Orbital radius in GL units
+    """
     glDisable(GL_LIGHTING)
     glPushMatrix()
     glColor3f(0.3, 0.3, 0.3)
@@ -62,8 +79,16 @@ def draw_orbit(distance):
     glEnable(GL_LIGHTING)
 
 
-def draw_elliptical_orbit(semi_major, semi_minor):
-    """Draw an elliptical orbit path (more realistic than circles)."""
+def draw_elliptical_orbit(semi_major: float, semi_minor: float) -> None:
+    """
+    Draw an elliptical orbit path in the XZ plane.
+    
+    More realistic than circular orbits—matches actual planetary eccentricities.
+    
+    Args:
+        semi_major: Major axis length (distance to aphelion)
+        semi_minor: Minor axis length (distance to perihelion)
+    """
     glDisable(GL_LIGHTING)
     glPushMatrix()
     glColor3f(0.25, 0.35, 0.25)  # subtle green for ellipse

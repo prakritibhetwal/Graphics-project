@@ -1,19 +1,21 @@
 """
 draw_city.py – City OBJ model loading and rendering.
 
+Loads and renders the 3D city model (OBJ format) with material properties from an MTL file.
 The OBJ and MTL files are expected to sit in the same directory as this script.
-The OBJ is loaded once at import time; `init_city_list()` must be called after
-OpenGL is initialised to compile the geometry into a display list.
+City geometry is compiled into a GL display list for efficient rendering.
 """
 import os
 import math
 import time
+from typing import Dict, Optional
 
 import pywavefront
 from OpenGL.GL import *
 from OpenGL.GLU import gluSphere
 
 import state
+from error_handler import log_error, safe_call
 
 # ── File paths ─────────────────────────────────────────────────────────────────
 _script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -23,8 +25,12 @@ _mtl_path   = os.path.join(_script_dir, "final- Copy.mtl")
 # ── Load OBJ ───────────────────────────────────────────────────────────────────
 try:
     city = pywavefront.Wavefront(_obj_path, collect_faces=True)
-except Exception:
-    print("Could not find the .obj file!")
+    log_error(f"Loaded city model from {_obj_path}", error_type="INFO")
+except FileNotFoundError:
+    log_error(f"OBJ file not found: {_obj_path}", error_type="RESOURCE_ERROR")
+    city = None
+except Exception as e:
+    log_error(f"Error loading OBJ file: {e}", error_type="RESOURCE_ERROR", print_traceback=True)
     city = None
 
 # ── Parse MTL for accurate material colours ────────────────────────────────────
@@ -32,7 +38,13 @@ mtl_materials       = {}   # material name  → {diffuse, ambient, specular, …
 mtl_materials_lower = {}   # lowercase name → same dict (for case-insensitive match)
 available_colors    = []   # flat list of all diffuse RGB values
 
-def load_mtl_file():
+def load_mtl_file() -> None:
+    """
+    Parse the MTL file and extract material properties.
+    
+    Populates global dicts: mtl_materials, mtl_materials_lower, available_colors.
+    Includes case-insensitive material name matching for robustness.
+    """
     global mtl_materials, mtl_materials_lower, available_colors
     try:
         with open(_mtl_path, "r") as f:
@@ -44,28 +56,51 @@ def load_mtl_file():
                     mtl_materials[current] = {}
                     mtl_materials_lower[current.lower()] = mtl_materials[current]
                 elif line.startswith("Kd ") and current:
-                    rgb = list(map(float, line.split()[1:4]))
-                    mtl_materials[current]["diffuse"] = rgb
-                    available_colors.append(rgb)
+                    try:
+                        rgb = list(map(float, line.split()[1:4]))
+                        mtl_materials[current]["diffuse"] = rgb
+                        available_colors.append(rgb)
+                    except (ValueError, IndexError) as e:
+                        log_error(f"Error parsing Kd line: {line}", error_type="PARSE_ERROR")
                 elif line.startswith("Ka ") and current:
-                    mtl_materials[current]["ambient"] = list(map(float, line.split()[1:4]))
+                    try:
+                        mtl_materials[current]["ambient"] = list(map(float, line.split()[1:4]))
+                    except (ValueError, IndexError):
+                        pass
                 elif line.startswith("Ks ") and current:
-                    mtl_materials[current]["specular"] = list(map(float, line.split()[1:4]))
+                    try:
+                        mtl_materials[current]["specular"] = list(map(float, line.split()[1:4]))
+                    except (ValueError, IndexError):
+                        pass
                 elif line.startswith("Ns ") and current:
-                    mtl_materials[current]["shininess"] = float(line.split()[1])
+                    try:
+                        mtl_materials[current]["shininess"] = float(line.split()[1])
+                    except (ValueError, IndexError):
+                        pass
                 elif line.startswith("Ke ") and current:
-                    mtl_materials[current]["emission"] = list(map(float, line.split()[1:4]))
-        print(f"Loaded {len(mtl_materials)} materials from MTL file "
-              f"with {len(available_colors)} colours")
+                    try:
+                        mtl_materials[current]["emission"] = list(map(float, line.split()[1:4]))
+                    except (ValueError, IndexError):
+                        pass
+        log_error(f"Loaded {len(mtl_materials)} materials from MTL file "
+                  f"with {len(available_colors)} colours", error_type="INFO")
+    except FileNotFoundError:
+        log_error(f"MTL file not found: {_mtl_path}", error_type="RESOURCE_ERROR")
     except Exception as e:
-        print(f"Could not load MTL file: {e}")
+        log_error(f"Error loading MTL file: {e}", error_type="RESOURCE_ERROR", print_traceback=True)
 
 load_mtl_file()
 
 
 # ── Internal helper: build face→material mapping from the OBJ ─────────────────
+# This is computed once at module load time, not every frame
+_face_materials_cache = None
+
 def _build_face_materials():
-    """Return a dict {face_index: material_name} by scanning the OBJ directly."""
+    """Return a dict {face_index: material_name} by scanning the OBJ directly.
+    
+    Called once at module import time and cached to avoid expensive file I/O each frame.
+    """
     mapping = {}
     current = None
     idx     = 0
@@ -81,6 +116,10 @@ def _build_face_materials():
     except Exception as e:
         print(f"Error parsing OBJ for materials: {e}")
     return mapping
+
+
+# Compute face materials once at import time
+_face_materials_cache = _build_face_materials()
 
 
 # ── Main draw function ─────────────────────────────────────────────────────────
@@ -104,7 +143,8 @@ def Draw_City():
             print(f"DEBUG: First mesh materials: {mesh.materials}")
         Draw_City._debug_printed = True
 
-    face_materials = _build_face_materials()
+    # Use cached face materials (computed once at module load)
+    face_materials = _face_materials_cache
     matches   = 0
     fallbacks = 0
 
@@ -141,13 +181,34 @@ def Draw_City():
 
 
 # ── Display-list compiler (call once after GL init) ────────────────────────────
-def init_city_list():
+def init_city_list() -> None:
+    """
+    Compile city geometry into a GL display list for efficient rendering.
+    
+    This function must be called once after OpenGL context is created.
+    The compiled display list is stored in state.city_list for use in the render loop.
+    
+    If the city model failed to load, this becomes a no-op.
+    """
     if not city:
+        log_error("Cannot create city display list: city model not loaded", error_type="WARNING")
         return
-    state.city_list = glGenLists(1)
-    glNewList(state.city_list, GL_COMPILE)
-    Draw_City()
-    glEndList()
+    
+    try:
+        state.city_list = glGenLists(1)
+        if state.city_list == 0:
+            log_error("Failed to allocate GL display list", error_type="OPENGL_ERROR")
+            return
+        
+        glNewList(state.city_list, GL_COMPILE)
+        Draw_City()
+        glEndList()
+        
+        log_error(f"Created city display list {state.city_list}", error_type="INFO")
+    except Exception as e:
+        log_error(f"Error creating city display list: {e}", 
+                 error_type="OPENGL_ERROR", print_traceback=True)
+        state.city_list = None
 
 # ── Vehicle rendering ──────────────────────────────────────────────────────────
 

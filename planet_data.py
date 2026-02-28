@@ -1,18 +1,28 @@
 """
-planet_data.py – All static planet / solar-system data.
-Imported by main.py, input.py, hud.py, and the draw modules as needed.
+planet_data.py – All static planet and solar system data.
+
+Contains planetary geometry, orbital mechanics, rotation parameters, and
+informational data about each planet. Can be imported by any module that
+needs to render or display planetary information.
+
+Imported by: main.py, input.py, hud.py, draw modules, etc.
 """
 from collections import deque
+from typing import List, Dict, Deque, Tuple
 
-# ── Axial tilts (degrees) ──────────────────────────────────────────────────────
+
+# ── Axial tilts (degrees) ──────────────────────────────────────────────────
+# These match NASA's real values for accurate visualization
 EARTH_TILT   = 23.5
 MARS_TILT    = 25.2
 SATURN_TILT  = 27.0
 URANUS_TILT  = 98.0
 NEPTUNE_TILT = 30.0
 
-# ── Static info shown in the HUD when a planet is selected ────────────────────
-PLANET_INFO = [
+# ── Static info shown in the HUD when a planet is selected ──────────────────
+# Each entry contains: name, radius in km, day length in hours, year in Earth days,
+# number of moons, and a notable fact
+PLANET_INFO: List[Dict[str, any]] = [
     {"name": "Mercury", "radius_km":  2439, "day_h":  1407.6, "year_d":    88, "moons": 0,   "note": "Retrograde: No"},
     {"name": "Venus",   "radius_km":  6051, "day_h":  5832.5, "year_d":   225, "moons": 0,   "note": "Retrograde: Yes"},
     {"name": "Earth",   "radius_km":  6371, "day_h":    23.9,  "year_d":   365, "moons": 1,   "note": "Only known life"},
@@ -25,7 +35,10 @@ PLANET_INFO = [
 ]
 
 # ── Planet geometry (distance from sun, sphere radius, base colour) ────────────
-planets = [
+# distance: orbital radius in simulation units
+# radius: visual sphere radius in GL units
+# color: RGB tuple for rendering (0.0-1.0 range)
+planets: List[Dict[str, any]] = [
     {"distance": 1.5,  "radius": 0.15, "color": (0.5, 0.5, 0.5)},  # Mercury
     {"distance": 2.5,  "radius": 0.2,  "color": (1.0, 1.0, 0.3)},  # Venus
     {"distance": 3.5,  "radius": 0.25, "color": (0.2, 0.5, 1.0)},  # Earth
@@ -38,30 +51,34 @@ planets = [
 ]
 
 # ── Per-frame mutable animation state ─────────────────────────────────────────
-planet_angle    = [0.0] * 9   # orbital angle around the sun
-planet_rotation = [0.0] * 9   # axial rotation angle
+# Updated each frame based on orbital/rotation speeds and time multiplier
+planet_angle: List[float] = [0.0] * 9       # orbital angle around the sun (radians)
+planet_rotation: List[float] = [0.0] * 9    # axial rotation angle (degrees)
 
-# Axial rotation speeds (degrees/frame), Earth = 1.0.  Negative = retrograde.
-#                Mercury  Venus    Earth   Mars    Jupiter  Saturn  Uranus   Neptune  Pluto
-rotation_speed = [0.017, -0.004,   1.0,   0.972,  2.411,   2.246, -1.388,  1.486,  -0.156]
+# Axial rotation speeds (degrees/frame), Earth = 1.0. Negative = retrograde.
+#                  Mercury  Venus    Earth   Mars    Jupiter  Saturn  Uranus   Neptune  Pluto
+rotation_speed: List[float] = [0.017, -0.004,   1.0,   0.972,  2.411,   2.246, -1.388,  1.486,  -0.156]
 
 # Orbital speeds (radians/frame)
-planet_speeds  = [0.004, 0.003, 0.002, 0.0016, 0.001, 0.0008, 0.0006, 0.0004, 0.0002]
+planet_speeds: List[float] = [0.004, 0.003, 0.002, 0.0016, 0.001, 0.0008, 0.0006, 0.0004, 0.0002]
 
-# Elliptical orbit eccentricity (0 = circle)
-eccentricity   = [0.2, 0.0, 0.0167, 0.09, 0.05, 0.06, 0.05, 0.01, 0.25]
+# Elliptical orbit eccentricity (0 = perfect circle, 1 = linear)
+eccentricity: List[float] = [0.2, 0.0, 0.0167, 0.09, 0.05, 0.06, 0.05, 0.01, 0.25]
 
 # ── Jupiter moons ──────────────────────────────────────────────────────────────
-jupiter_moon_angle  = [0.0, 0.0]    # Io and Europa
-jupiter_moon_speeds = [0.08, 0.04]
+# Io and Europa orbit Jupiter with these parameters
+jupiter_moon_angle: List[float] = [0.0, 0.0]    # orbital angle
+jupiter_moon_speeds: List[float] = [0.08, 0.04]  # radians/frame
 
 # ── Comets ─────────────────────────────────────────────────────────────────────
-comets = [
+# Two comets with dynamically varying orbital distances for visual interest
+comets: List[Dict[str, any]] = [
     {"speed": 0.001,  "distance_range": (5, 12), "color": (1.0, 1.0, 0.8)},
     {"speed": 0.0015, "distance_range": (4, 11), "color": (0.9, 1.0, 0.7)},
 ]
-comet_angle = [0.0, 2.0]
+comet_angle: List[float] = [0.0, 2.0]
 
 # ── Orbit trails (rolling buffer of recent world positions, one per planet) ────
-TRAIL_LENGTH  = 150   # number of positions kept per planet
-planet_trails = [deque(maxlen=TRAIL_LENGTH) for _ in range(9)]
+# Each planet has a deque of recent positions for drawing fading orbit trails
+TRAIL_LENGTH: int = 150   # number of positions kept per planet
+planet_trails: List[Deque[Tuple[float, float, float]]] = [deque(maxlen=TRAIL_LENGTH) for _ in range(9)]
